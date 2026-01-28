@@ -1,23 +1,18 @@
-# Use the official Node.js image as the base image
-FROM node:22.4.0
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS builder
 
-# Set the working directory inside the container
-WORKDIR /usr/src/app
-
-# Copy package.json and package-lock.json to the working directory
-COPY package*.json ./
-
-# Install the application dependencies
-RUN npm install
-
-# Copy the rest of the application files
+WORKDIR /app
+COPY package.json yarn.lock ./
+RUN --mount=type=cache,target=/root/.cache/yarn \
+    yarn install --frozen-lockfile
 COPY . .
+RUN yarn build
+RUN yarn install --production --frozen-lockfile \
+    && yarn cache clean
 
-# Build the NestJS application
-RUN npm run build
+FROM node:22-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9 AS release
 
-# Expose the application port
-# EXPOSE 3000
-
-# Command to run the application
-CMD ["node", "dist/main"]
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["node", "dist/main.js"]
